@@ -37,9 +37,15 @@ class MyObject(Resource):
         return myobject
 
 # Add REST resource to API
+# Route defines a URL that can be called by a client application
+# Parameter 1: resource which we want ot map to a specific URL
+# Parameter 2/3: one is used to create an instance the other is used to retrieve a specific instance
 api.add_resource(MyObject, '/myobject/','/myobject/<string:myobject_id>')
 
 # provide a custom JSON serializer for flaks_restful
+# JSON encoder takes python objects and turns them into JSON text representation
+# Using a custom serializer here because the default doesn't know MongoDB's object IDs
+# Remember object_id is not a string
 @api.representation('application/json')
 def output_json(data, code, headers=None):
     resp = make_response(JSONEncoder().encode(data), code)
