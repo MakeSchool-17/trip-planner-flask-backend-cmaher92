@@ -10,31 +10,46 @@ mongo = MongoClient('localhost', 27017)  # establish connection to database
 app.db = mongo.develop_database          # specify database used to store data
 api = Api(app)                           # creates instance of the flask_restful api
 
-#Implement REST Resource
-class MyObject(Resource):
 
+# creates, retrieves, and updates a trip instance
+class Trip(Resource):
+
+    # when invoked creates new instance of a trip
     def post(self):
-      new_myobject = request.json        # access object provided by request
-      myobject_collection = app.db.myobjects  # acess collection in which new object will be stored
-      result = myobject_collection.insert_one(request.json)  # insert document into collection
+        # sets variable to client-provided JSON
+        trip = request.json
+        # access collection where the new trip will be stored
+        trip_collection = app.db.trips
+        # inserts one trip (JSON) into the trip_collection
+        result = trip_collection.insert_one(trip)
+        # then check the result after inserting doc into collection
+        # find_one() returns a single doc from the database
+        # see api.mongodb.org for docs
+        my_trip = trip_collection.find_one(
+            {'_id': ObjectId(result.inserted_id)})
+        return my_trip
 
-      myobject = myobject_collection.find_one({"_id": ObjectId(result.inserted_id)})
-      # retrieve result, take result and fetch specified document
+    # retrieves an instance of a trip
+    def get(self, trip_id=None):
+        # checks trip_collection for the doc that client is accessing
+        trip_collection = app.db.trips
+        # query based on passed trip_id
+        trip = trip_collection.find_one_or_404({'_id': ObjectId(trip_id)})
+        return trip
 
-      return myobject
-      # return selected document to the client
+    # update trip
+    def put(self, trip_id):
+        trip_update = request.json
+        trip_collection = app.db.trips
 
-    def get(self, myobject_id):
-      myobject_collection = app.db.myobjects  # reference the collection where the document will be selected from
-      myobject = myobject_collection.find_one({"_id": ObjectId(myobject_id)})
-      # query based om the myobject_id received as part of the clients' request
+        result = trip_collection.update_one({'_id': ObjectId(trip_id)},
+                                            {'$set': trip_update})
+        updated = trip_collection.find_one({'_id': ObjectId(trip_id)})
+        return updated
 
-      if myobject is None:  # if no object is found a 404 error is returned to client
-        response = jsonify(data=[])
-        response.status_code = 404
-        return response
-      else:
-        return myobject
+    # delete trip
+
+
 
 # Add REST resource to API
 # Route defines a URL that can be called by a client application

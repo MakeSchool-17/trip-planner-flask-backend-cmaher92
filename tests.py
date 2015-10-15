@@ -5,8 +5,9 @@ from pymongo import MongoClient
 
 class FlaskrTestCase(unittest.TestCase):
 
+    # prepares resources for a test
     def setUp(self):
-      self.app = server.app.test_client()
+      self.app = server.app.test_client()  # reference the server application
       # Run app in testing mode to retrieve exceptions and stack traces
       server.app.config['TESTING'] = True
 
@@ -16,29 +17,30 @@ class FlaskrTestCase(unittest.TestCase):
       server.app.db = db
 
       # Drop collection (significantly faster than dropping entire db)
+      # Drops any objects created by earlier tests are removed
       db.drop_collection('myobjects')
 
     # MyObject tests
 
     def test_posting_myobject(self):
-      response = self.app.post('/myobject/', 
+      response = self.app.post('/myobject/',
         data=json.dumps(dict(
           name="A object"
-        )), 
+        )),
         content_type = 'application/json')
-      
+
       responseJSON = json.loads(response.data.decode())
 
       self.assertEqual(response.status_code, 200)
       assert 'application/json' in response.content_type
       assert 'A object' in responseJSON["name"]
 
-  
+
     def test_getting_trip(self):
-      response = self.app.post('/myobject/', 
+      response = self.app.post('/myobject/',
         data=json.dumps(dict(
           name="Another object"
-        )), 
+        )),
         content_type = 'application/json')
 
       postResponseJSON = json.loads(response.data.decode())

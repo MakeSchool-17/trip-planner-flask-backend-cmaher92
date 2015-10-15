@@ -1,0 +1,28 @@
+Drivers allow interaction between mongo and flask.
+Swift JSON parser (argo?)
+ignite engine - JSON -> Apps?
+port :3030
+pymongo (find, insert, update, delete)
+
+Form filled in, button hit, JSON created, POST request
+
+Starter project has 1 resource and two methods (GET, POST )
+POST shows how to insert additional data
+* Shows how to create a basic API using flask
+
+Resource - TRIP
+- GET
+- POST
+- PUT
+- DELETE
+
+Resource - USER
+- GET (checks if username/password is correct) (status_code 200 if correct)
+
+Google HTTP status codes
+
+To Do:
+- treehouse flask
+- read about status codes (unless treehouse has it)
+- build TRIP resource
+- build USER resource
