@@ -9,7 +9,7 @@ import bcrypt
 app = Flask(__name__)                    # create flask instance and assign var
 mongo = MongoClient('localhost', 27017)  # establish connection to database
 app.db = mongo.develop_database          # specify database used to store data
-api = Api(app)                           # creates instance of the flask_restful api
+api = Api(app)                           # creates instance of flask rest_api
 
 
 # creates, retrieves, and updates a trip instance
@@ -39,22 +39,25 @@ class Trip(Resource):
         return trip
 
     # update trip
-    def put(self, trip_id):
-        trip_update = request.json
-        trip_collection = app.db.trips
+    def put(self, trip_id=None):
+        trip_update = request.json          # access JSON passed in
+        trip_collection = app.db.trips      # access collection of Trips
 
-        result = trip_collection.update_one({'_id': ObjectId(trip_id)},
-                                            {'$set': trip_update})
+        # find the trip_id passed in and update using $set
+        trip_collection.update_one({'_id': ObjectId(trip_id)},
+                                   {'$set': trip_update})
+        # retrieve the updated Trip
         updated = trip_collection.find_one({'_id': ObjectId(trip_id)})
-        return updated
+        return updated                      # return updated Trip doc
 
     # delete trip
     def delete(self, trip_id):
         trip_collection = app.db.trips
-        result = trip_collection.delete_one({'_id': ObjectId(trip_id)})
+        trip_collection.delete_one({'_id': ObjectId(trip_id)})
         deleted_trip = trip_collection.find_one_or_404(
             {'_id': ObjectId(trip_id)})
         return deleted_trip
+
 
 class User(Resource):
 
@@ -72,10 +75,6 @@ class User(Resource):
         resp = jsonify(message=[])
         resp.status_code = 200
         return resp
-
-
-
-
 
 # Add REST resource to API
 # Route defines a URL that can be called by a client application
