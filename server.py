@@ -17,12 +17,9 @@ class Trip(Resource):
 
     # when invoked creates new instance of a trip
     def post(self):
-        # sets variable to client-provided JSON
-        trip = request.json
-        # access collection where the new trip will be stored
+        new_trip = request.json  # why not 'get_json' instead?
         trip_collection = app.db.trips
-        # inserts one trip (JSON) into the trip_collection
-        result = trip_collection.insert_one(trip)
+        result = trip_collection.insert_one(new_trip)
         # then check the result after inserting doc into collection
         # find_one() returns a single doc from the database
         # see api.mongodb.org for docs
