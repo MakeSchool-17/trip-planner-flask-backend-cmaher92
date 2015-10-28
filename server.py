@@ -4,6 +4,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from utils.mongo_json_encoder import JSONEncoder
 import bcrypt
+from functools import wraps
 
 # Basic Setup
 app = Flask(__name__)                    # create flask instance and assign var
@@ -11,79 +12,119 @@ mongo = MongoClient('localhost', 27017)  # establish connection to database
 app.db = mongo.develop_database          # specify database used to store data
 api = Api(app)                           # creates instance of flask rest_api
 
+def check_auth(username, password):
+    user_collection = app.db.users
+    user = user_collection.find_one({'username': username})
 
-# creates, retrieves, and updates a trip instance
-class Trip(Resource):
+    if user is None:
+        return False
+    else:
+        # check if hash generated based on auth matches stored hash
+        encodedPassword = password.encode('utf-8')
+        if bcrypt.hashpw(encodedPassword,
+                         user['password']) == user['password']:
+            return True
+        else:
+            return False
 
-    # when invoked creates new instance of a trip
-    def post(self):
-        new_trip = request.json  # why not 'get_json' instead?
-        trip_collection = app.db.trips
-        result = trip_collection.insert_one(new_trip)
-        # then check the result after inserting doc into collection
-        # find_one() returns a single doc from the database
-        # see api.mongodb.org for docs
-        my_trip = trip_collection.find_one(
-            {'_id': ObjectId(result.inserted_id)})
-        return my_trip
 
-    # retrieves an instance of a trip
-    def get(self, trip_id=None):
-        # checks trip_collection for the doc that client is accessing
-        trip_collection = app.db.trips
-        # query based on passed trip_id
-        trip = trip_collection.find_one_or_404({'_id': ObjectId(trip_id)})
-        return trip
-
-    # update trip
-    def put(self, trip_id=None):
-        trip_update = request.json          # access JSON passed in
-        trip_collection = app.db.trips      # access collection of Trips
-
-        # find the trip_id passed in and update using $set
-        trip_collection.update_one({'_id': ObjectId(trip_id)},
-                                   {'$set': trip_update})
-        # retrieve the updated Trip
-        updated = trip_collection.find_one({'_id': ObjectId(trip_id)})
-        return updated                      # return updated Trip doc
-
-    # delete trip
-    def delete(self, trip_id):
-        trip_collection = app.db.trips
-        trip_collection.delete_one({'_id': ObjectId(trip_id)})
-        deleted_trip = trip_collection.find_one_or_404(
-            {'_id': ObjectId(trip_id)})
-        return deleted_trip
-
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwards):
+        auth = request.Authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return ({'error': 'Basic Auth Required.'}, 401, None)
 
 class User(Resource):
 
     def post(self):
-        user = request.json  # requests json doc
-        user_collection = app.db.users  # collection of users to store
-        encoded_password = user['password'].encode('utf-8')  # encodes pass
-        hashed_password = bcrypt.hashpw(encoded_password,  # hashes password
-                                        bcrypt.gensalt(app.bcrypt_rounds))
-        user['password'] = hashed_password  # updates
-        user_collection.insert_one(user)  # inserts
-        return
+        if (request.json['username'] is None
+                or request.json['password'] is None):
+                return ({'error':  'Request requires username and password'},
+                        400,
+                        None)
 
+        user_collection = app.db.users
+        user = user_collection.find_one({'username': request.json['username']})
+
+        if user is not None:
+            return ({'error': 'Username already in use'}, 400, None)
+        else:
+            encodedPassword = request.json['password'].encode('utf-8')
+            hashed = bcrypt.hashpw(
+                encodedPassword, bcrypt.gensalt(app.bcrypt_rounds))
+            request.json['password'] = hashed
+            user_collection.insert_one(request.json)
+
+    @requires_auth
     def get(self):
-        resp = jsonify(message=[])
-        resp.status_code = 200
-        return resp
+        return (None, 200, None)
 
-# Add REST resource to API
-# Route defines a URL that can be called by a client application
-# Parameter 1: resource which we want ot map to a specific URL
-# Parameter 2/3: one is used to create an instance the other is used to retrieve a specific instance
+
+class Trip(Resource):
+
+    @requires_auth
+    def get(self, trip_id=None):
+        if trip_id is None:
+            trip_collection = app.db.trips
+            trips = list(trip_collection.find(
+                {'user': request.authorization.username}))
+            return trips
+        else:
+            trip_collection = app.db.trips
+            trip = trip_collection.find_one(
+                {'_id': ObjectId(trip_id),
+                 'user': request.authorization.username})
+
+            if trip is None:
+                # Flask allows us to return tuple in form
+                # (response, status, headers)
+                return (None, 404, None)
+            else:
+                return trip
+
+    @requires_auth
+    def post(self):
+        new_trip = request.json
+        new_trip['user'] = request.authorization.username
+        trip_collection = app.db.trips
+        result = trip_collection.insert_one(request.json)
+
+        trip = trip_collection.find_one(result.inserted_id)
+
+        return (trip, 201, None)
+
+    @requires_auth
+    def put(self, trip_id):
+        new_trip = request.json
+        new_trip['user'] = request.authorization.username
+        trip_collection = app.db.trips
+
+        # remove _id since we can't update it and would need to
+        # transform it into an ObjectId
+        del request.json['_id']
+        trip_collection.update_one({'_id': ObjectId(trip_id),
+                                    'user': request.authorization.username},
+                                   {'$set': request.json})
+        trip = trip_collection.find_one(ObjectId(trip_id))
+
+        return trip
+
+    @requires_auth
+    def delete(self, trip_id):
+        trip_collection = app.db.trips
+        trip_collection.delete_one(
+            {'_id': ObjectId(trip_id),
+             'user': request.authorization.username}
+        )
+
+        return {"tripIdentifier": trip_id}
+
 api.add_resource(Trip, '/trip/', '/trip/<string:trip_id>')
-api.add_resource(User, '/user/', '/user/<string:user_id>')
+api.add_resource(User, '/user/')
+
 
 # provide a custom JSON serializer for flaks_restful
-# JSON encoder takes python objects and turns them into JSON text representation
-# Using a custom serializer here because the default doesn't know MongoDB's object IDs
-# Remember object_id is not a string
 @api.representation('application/json')
 def output_json(data, code, headers=None):
     resp = make_response(JSONEncoder().encode(data), code)
@@ -91,6 +132,7 @@ def output_json(data, code, headers=None):
     return resp
 
 if __name__ == '__main__':
-    # Turn this on in debug mode to get detailled information about request related exceptions: http://flask.pocoo.org/docs/0.10/config/
+    # Turn this on in debug mode to get detailled information about request
+    # related exceptions: http://flask.pocoo.org/docs/0.10/config/
     app.config['TRAP_BAD_REQUEST_ERRORS'] = True
     app.run(debug=True)
