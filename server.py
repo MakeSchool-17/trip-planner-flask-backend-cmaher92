@@ -1,16 +1,20 @@
-from flask import Flask, request, make_response, jsonify
+import bcrypt
+from flask import Flask, request, make_response
 from flask_restful import Resource, Api
 from pymongo import MongoClient
-from bson.objectid import ObjectId
 from utils.mongo_json_encoder import JSONEncoder
-import bcrypt
+from bson.objectid import ObjectId
 from functools import wraps
 
-# Basic Setup
-app = Flask(__name__)                    # create flask instance and assign var
-mongo = MongoClient('localhost', 27017)  # establish connection to database
-app.db = mongo.develop_database          # specify database used to store data
-api = Api(app)                           # creates instance of flask rest_api
+# This is the solution provided by Benji, I saved a local copy of my unfished
+# untested solution. I will update when completed.
+
+app = Flask(__name__)
+mongo = MongoClient('localhost', 27017)
+app.db = mongo.develop_database
+app.bcrypt_rounds = 12
+api = Api(app)
+
 
 def check_auth(username, password):
     user_collection = app.db.users
@@ -19,7 +23,7 @@ def check_auth(username, password):
     if user is None:
         return False
     else:
-        # check if hash generated based on auth matches stored hash
+        # check if the hash we generate based on auth matches stored hash
         encodedPassword = password.encode('utf-8')
         if bcrypt.hashpw(encodedPassword,
                          user['password']) == user['password']:
@@ -30,10 +34,13 @@ def check_auth(username, password):
 
 def requires_auth(f):
     @wraps(f)
-    def decorated(*args, **kwards):
-        auth = request.Authorization
+    def decorated(*args, **kwargs):
+        auth = request.authorization
         if not auth or not check_auth(auth.username, auth.password):
             return ({'error': 'Basic Auth Required.'}, 401, None)
+        return f(*args, **kwargs)
+    return decorated
+
 
 class User(Resource):
 
